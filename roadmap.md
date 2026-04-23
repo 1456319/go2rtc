@@ -43,7 +43,7 @@ This MVP transforms a fork of `go2rtc` into a native Android application designe
 
 1. **Database Encryption:**
    - *Risk:* In 2026, Wyze may have moved to SQLCipher or Keystore-backed encryption for their `/data/data/` storage.
-   - *Mitigation:* If scraping fails, the app must gracefully degrade to the manual Wyze API Key login form. Do not crash on inaccessible databases. Implement robust Try/Catch blocks during the SQLite reading phase.
+   - *Mitigation:* If scraping fails, the app must gracefully degrade to the manual Wyze API Key login form. Do not crash on inaccessible databases. Handle SQLite, parsing, and file-access failures gracefully during the reading phase and surface a recoverable fallback state.
 
 2. **JNI/NDK Boundary Crashes:**
    - *Risk:* Running a Go binary (`go2rtc`) inside an Android context via JNI can lead to signal faults (SIGSEGV) if memory boundaries are crossed or if Go tries to use unavailable Android syscalls.
