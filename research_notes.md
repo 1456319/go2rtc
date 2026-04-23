@@ -1,5 +1,16 @@
 # Wyze-Android-Bypass MVP Research Notes (Architect)
 
+## Core Requirements & Constraints
+
+1. **Objective**: Develop a native Android application (Wyze-Android-Bypass MVP) that authenticates and maintains a stream for a single Wyze doorbell camera.
+2. **Environment**: APatch-rooted ARM64 devices.
+3. **Key Functionalities**:
+   - Authentication.
+   - Stream maintenance (via a go2rtc bridge).
+   - Local network interception (preventing LAN interference by isolating the bridge using the Wyze UID and MAC address).
+   - Token scraping via APatch/su if the official Wyze app is installed (zero assumptions about the database structure).
+   - Crash logging with high verbosity for debug versions.
+
 ## Overview
 This document compiles intelligence gathered on Wyze authentication, token handling, and local stream interception mechanisms as of late 2024 / 2026+. It focuses heavily on how `go2rtc` implements the `wyze` native protocol (via TUTK/DTLS) and the requirements for an APatch-rooted Android app to bypass standard Wyze cloud dependency for local streams.
 
@@ -13,9 +24,9 @@ This document compiles intelligence gathered on Wyze authentication, token handl
    - Endpoint: `https://api.wyzecam.com/app/v2/home_page/get_object_list` (and `/app/v2/device/get_iotc_info`)
    - Retrieves the list of cameras, extracting the critical `mac`, `p2p_id` (UID), `enr` (Encryption key for DTLS), and `ip`.
 2. **Local P2P Handshake (TUTK / IOTC)**:
-   - Connects locally to the camera's IP on port `0` (dynamic/probed) or discovered via UDP broadcast.
+   - Connects locally to the camera's IP using the default TUTK/DTLS port `32761` when `port == 0` is passed; UDP discovery may then update the remote address/port.
    - Requires the 20-character P2P UID (`uid`).
-   - Uses DTLS (Datagram Transport Layer Security) for encryption (`dtls.DialDTLS(host, port, uid, authKey, enr)`).
+   - Uses DTLS (Datagram Transport Layer Security) for encryption (`dtls.DialDTLS(host, port, uid, authKey, enr)`), where `port == 0` means "use the default initial port" rather than literally dialing UDP port 0.
 3. **Session Authentication (K-Auth)**:
    - `doKAuth()` sequence in `pkg/wyze/client.go`:
      - **K10000**: Initiates auth sequence.
@@ -26,6 +37,7 @@ This document compiles intelligence gathered on Wyze authentication, token handl
    - Sends AV Login.
    - Probes for codecs (e.g., H264, AAC).
    - Starts reading AV frames via `tutk.Packet`.
+   - **Supported Codecs:** H.264/H.265 video; AAC, G.711, PCM, Opus audio. Two-way audio (intercom) is also supported by the protocol.
 
 ### Required Data for Local Connection
 To connect directly to a Wyze camera locally without hitting the cloud, the following data points are strictly necessary per device:
@@ -67,3 +79,8 @@ The MVP requires an automated bridge generation.
 ## Architectural Boundaries
 - **Cross-Compilation**: `go2rtc` must be cross-compiled to `android/arm64` (aarch64). The resulting binary must be packaged within the APK's `lib/arm64-v8a/` directory or extracted to the app's internal storage and executed via `Runtime.getRuntime().exec()`.
 - **NDK vs. Binary Executable**: Running the Go binary as a standalone child process is vastly simpler than building it as a C-shared library and calling it via JNI, though lifecycle management (orphaned processes) becomes critical.
+
+## go2rtc Bridging Summary
+- The `go2rtc` bridge establishes the P2P connection, performs the K10001/K10003 DTLS handshake, and extracts the raw A/V packets.
+- To prevent LAN interference, the MVP must instantiate the go2rtc bridge with a configuration that strictly binds to the specific `uid` and `mac` of the target device.
+- Cross-compilation for `aarch64` is necessary to embed `go2rtc` within the Android application.
