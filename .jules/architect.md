@@ -3,7 +3,7 @@
 ## Missing Intelligence & Vectors of Confusion
 1. **2026+ Wyze App Encryption**: It is highly probable that modern iterations of the Wyze app (`com.hualai.WyzeCam`) utilize Android's `EncryptedSharedPreferences` or SQLCipher for their local databases. If the `enr` and `uid` keys are encrypted at rest using keys tied to the Wyze app's Keystore alias, reading the files directly via `su` will yield useless encrypted byte arrays.
    - *Mitigation*: We must build the app with a graceful fallback. If root extraction fails due to encryption, the app must fall back to requesting the user's Wyze API ID and Secret to hit the cloud API *once* to fetch the P2P details, circumventing local app extraction entirely.
-2. **Gwell vs TUTK Protocols**: According to `pkg/wyze/README.md`, newer cameras (like Wyze Cam OG, OG Telephoto) use "Gwell*" protocols which are currently *unsupported* by the go2rtc integration. If the user possesses one of these, the bypass will fail. We need to clearly identify the device model during extraction and abort if it's unsupported.
+2. **Gwell vs TUTK Protocols**: Newer cameras (like Wyze Cam OG, OG Telephoto) may use "Gwell*" protocols that are not supported by the current go2rtc Wyze integration. If the user possesses one of these, the bypass will fail. We need to clearly identify the device model during extraction and abort if it's unsupported.
 3. **Dynamic IP Assignments**: If the doorbell camera is on DHCP, its IP will change. The go2rtc YAML requires an IP (`wyze://[IP]?uid=...`).
    - *Mitigation*: The app must actively resolve the IP via mDNS or by matching the extracted MAC address against the local ARP table before regenerating the `go2rtc.yaml` file.
 
