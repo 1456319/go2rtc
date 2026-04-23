@@ -5,7 +5,7 @@
 - **Tasks**:
   1. Initialize an Android project targeting SDK 34+.
   2. Implement a Root Shell utility wrapper (e.g., integrating `libsu` by topjohnwu) to ensure reliable `APatch`/`Magisk` su command execution.
-  3. Setup a CI/CD pipeline (GitHub Actions) to cross-compile the `go2rtc` Go binary for `android/arm64` and package it as an raw asset in the APK.
+  3. Setup a CI/CD pipeline (GitHub Actions) to cross-compile the `go2rtc` Go binary for `android/arm64` and package it as a raw asset in the APK.
 
 ## Phase 2: Intelligence & Extraction Pipeline
 - **Objective**: Dynamically locate and extract required Wyze credentials (`uid`, `enr`, `mac`, `ip`) without manual user entry.
