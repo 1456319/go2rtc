@@ -19,7 +19,7 @@ This document compiles intelligence gathered on Wyze authentication, token handl
 
 ### Core Mechanisms (TUTK / DTLS)
 1. **Cloud Authentication**:
-   - Endpoint: `https://auth-prod.api.wyze.com/api/user/login`
+   - Endpoint: `https://auth-prod.api.wyze.com/api/user/login` (requires API ID, API Key, email, password)
    - Uses email/password or MD5-hashed passwords to receive an `access_token`.
    - Endpoint: `https://api.wyzecam.com/app/v2/home_page/get_object_list` (and `/app/v2/device/get_iotc_info`)
    - Retrieves the list of cameras, extracting the critical `mac`, `p2p_id` (UID), `enr` (Encryption key for DTLS), and `ip`.
@@ -46,25 +46,24 @@ To connect directly to a Wyze camera locally without hitting the cloud, the foll
 - **`enr`**: DTLS encryption key.
 - **`mac`**: MAC address of the camera.
 - **`model`**: Device model (e.g., `HL_CAM4`, `HL_DB2`).
+- The specific URL format used by go2rtc: `wyze://[IP]?uid=[P2P_ID]&enr=[ENR]&mac=[MAC]&model=[MODEL]&dtls=true`
 
 ## Android Root Extraction Strategy (APatch/Magisk)
-Since the MVP goal is to function without user-entered credentials by scraping data from an installed Wyze app (`com.hualai.WyzeCam`), we must rely on root access.
+Since the MVP goal is to function without user-entered credentials by scraping data from an installed Wyze app (e.g. `com.hualai.WyzeCam` or `com.wyze.smarthome`), we must rely on root access.
+
+- **Target Data:** The active access/refresh tokens, or directly the device list containing `mac`, `uid`, and `enr` keys.
+- **Limitation:** The theoretical path for a local ownership app with root access is to read the SQLite databases or SharedPreferences XML files created by the official Wyze app to extract the authentication bearer token or the `enr` (encryption key) directly, bypassing the need to ping `auth-prod.api.wyze.com`.
 
 ### App Data Storage
 1. **Shared Preferences**: `com.hualai.WyzeCam` likely stores user session tokens and potentially cached device lists in `/data/data/com.hualai.WyzeCam/shared_prefs/`.
 2. **Databases**: SQLite databases in `/data/data/com.hualai.WyzeCam/databases/` (e.g., `wyze_device.db` or similar) will contain cached `mac`, `p2p_id`, and `enr` values.
 3. **Keystore Encryption**: Modern Wyze apps (v2.50.0+) likely use Android Keystore to encrypt sensitive Shared Preferences (e.g., `EncryptedSharedPreferences`).
-   - **Bypass**: Extracting data might require hooking the application runtime via Xposed/LSPosed or directly querying the SQLite databases if `enr` strings are stored in plaintext.
 
 ### Token Extraction Pipeline
 - **Method A (Direct File Read via Root)**:
   - Run `su -c 'cat /data/data/com.hualai.WyzeCam/shared_prefs/some_pref.xml'`
   - Search for `access_token` or cached `enr` values.
-  - Risk: High likelihood of encryption.
-- **Method B (Memory / Runtime Extraction)**:
-  - Utilize APatch modules to inject a payload into `com.hualai.WyzeCam` to dump the decrypted `enr` and `uid` keys.
-- **Method C (Local MITM / Intent Sniffing)**:
-  - Monitor local broadcasts or utilize root to intercept the app's local network traffic to the camera to sniff the `enr`/`uid` during the initial handshake, though DTLS makes sniffing the payload difficult without the key.
+  - Risk: High likelihood of encryption. If scraping fails, the app must gracefully degrade to the manual Wyze API Key login form. Do not crash on inaccessible databases. Implement robust Try/Catch blocks during the SQLite reading phase.
 
 ## go2rtc.yaml Automation Pipeline
 The MVP requires an automated bridge generation.
@@ -75,6 +74,9 @@ The MVP requires an automated bridge generation.
     doorbell_local: wyze://192.168.1.50?uid=WYZEXXXXXXXX&enr=YYYYYYYYYYYY&mac=AABBCCDDEEFF&model=HL_DB2&dtls=true
   ```
 - By forcing the `ip` parameter, we ensure the bridge targets the LAN IP, preventing internet-bound traffic.
+- The MVP should spawn an internal go2rtc instance.
+- The `go2rtc.yaml` configuration must be dynamically generated on the Android device using the extracted `uid`, `enr`, `mac`, and `model`.
+- By pointing go2rtc strictly to the camera's IP using the specific `wyze://...` URI, it establishes a direct P2P connection via DTLS without broadcasting or interfering with the official app's standard operations on the LAN.
 
 ## Architectural Boundaries
 - **Cross-Compilation**: `go2rtc` must be cross-compiled to `android/arm64` (aarch64). The resulting binary must be packaged within the APK's `lib/arm64-v8a/` directory or extracted to the app's internal storage and executed via `Runtime.getRuntime().exec()`.
